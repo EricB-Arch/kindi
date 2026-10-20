@@ -1,0 +1,31 @@
+# Kindi configuration - copy to ~/.kindi/kindi.conf (or ./kindi.conf, or point KINDI_CONFIG / --config at it).
+# Every key is optional; these are the defaults. Environment variables KINDI_<KEY> and command-line flags win over
+# this file. See docs/CONFIGURATION.md.
+
+[kindi]
+# --- where things live
+pack = ~/.kindi/pack
+state_dir = ~/.kindi/state
+
+# --- server
+host = 127.0.0.1
+port = 8093
+# api_key = choose-a-long-random-string
+model_name = bonsai2-2b
+
+# --- engine
+ctx = 24576
+head = exact
+fast_clusters = 256
+
+# --- prompt cache
+checkpoint_every = 256
+prefix_max = 8
+prefix_min = 512
+park_max = 3
+
+# --- generation defaults (a request's own values win)
+max_tokens = 1024
+temperature = 0.7
+top_p = 0.8
+top_k = 20

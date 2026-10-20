@@ -1,0 +1,18 @@
+# model files and everything Kindi generates
+*.gguf
+pack/
+state/
+*.bin
+*.f32
+*.npz
+*.npy
+# local configuration (copy kindi.conf.example)
+kindi.conf
+*.local.*
+.env
+# python / tooling
+__pycache__/
+*.pyc
+*.log
+.vscode/
+.idea/
