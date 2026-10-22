@@ -1,5 +1,8 @@
 # Running Kindi with Docker
 
+To install Kindi with one command (the image, the model and a service), see [INSTALL.md](INSTALL.md). This page
+tells how to do the same steps by hand.
+
 The image (`docker/Dockerfile`) is Ubuntu 18.04 with the CUDA 10.2 toolkit, Python 3.6, CuPy 9.6, FastAPI and
 Kindi. Everything Kindi reads or writes lives in one volume mounted at `/data`:
 

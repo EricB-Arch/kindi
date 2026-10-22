@@ -11,13 +11,12 @@ state_dir = ~/.kindi/state
 host = 127.0.0.1
 port = 8093
 # api_key = choose-a-long-random-string
-model_name = bonsai2-2b
+model_name = auto
 
 # --- engine
 ctx = 24576
 head = exact
 fast_clusters = 256
-
 # --- prompt cache
 checkpoint_every = 256
 prefix_max = 8

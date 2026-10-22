@@ -1,29 +1,47 @@
-<p align="center"><img src="assets/kindi-banner.svg" alt="Kindi - a modern 2B-parameter LLM at 20+ tokens/s on a 2014 NVIDIA Quadro K420 with 1 GB" width="100%"></p>
+<p align="center"><img src="assets/kindi-banner.svg" alt="Kindi 0.2.0: modern 2B to 27B language models on low-cost NVIDIA cards, from a 1 GB Quadro K420 to an RTX 3080. Two Quadro K1200 cards work as one 8 GB card." width="100%"></p>
 
-# Kindi 0.1.0
+# Kindi 0.2.0
 
 [![License: AGPL-3.0](https://img.shields.io/badge/license-AGPL--3.0-blue.svg)](LICENSE)
 [![Commercial licenses available](https://img.shields.io/badge/commercial%20licenses-available-green.svg)](COMMERCIAL-LICENSE.md)
-[![Release v0.1.0](https://img.shields.io/badge/release-v0.1.0-lightgrey.svg)](https://github.com/ahtx/kindi/releases/tag/v0.1.0)
+[![Release v0.2.0](https://img.shields.io/badge/release-v0.2.0-lightgrey.svg)](https://github.com/ahtx/kindi/releases/tag/v0.2.0)
 
-Kindi is a custom inference engine. It runs **Ternary-Bonsai-2-2B**, a modern 2-billion-parameter language
-model with ternary weights. It runs this model on the **NVIDIA Quadro K420** (Kepler, 1 GB) at **20-23 tokens per
-second**. It has an **OpenAI-compatible server** for chat clients, scripts and agents that write code. Its default
-output is token-for-token identical to the output of llama.cpp for the same model file, and it is about 7x faster on
-this card. The one-page summary is
-[WHY.md](WHY.md).
+Kindi is a custom inference engine for Prism ML's **Ternary-Bonsai-2** language models (2B, 4B, 9B and 27B
+parameters, ternary weights). It started on the **NVIDIA Quadro K420** (Kepler, 1 GB), where it runs the 2B at
+**20-23 tokens per second**. Version 0.2.0 adds the Quadro K1200, two cards in tensor parallel, the GeForce GTX 1080,
+the GeForce RTX 3080, a CPU engine and a one-command installer. It has an **OpenAI-compatible server** for chat
+clients, scripts and agents that write code. Its default output is token-for-token identical to the output of
+llama.cpp for the same model file. On the K420, with the same file and the same context, it generates 12x faster
+than llama.cpp. The comparisons for each card are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). The one-page summary
+is [WHY.md](WHY.md).
 
 <p align="center"><img src="assets/kindi-demo.gif" alt="The pi coding agent driving Kindi on a Quadro K420: it runs nvidia-smi, writes and runs a Python script, and checks disk space" width="100%"></p>
 
 <p align="center"><sub>Recorded live: the <a href="https://pi.dev">pi</a> coding agent (with a Kindi colour theme)
 connected to <code>kindi serve</code> on one Quadro K420, default settings. Token streaming is real time. We
 shortened pauses longer than 2.5 s. The <a href="https://github.com/ahtx/kindi/releases/download/v0.1.0/kindi-demo-untrimmed.mp4">full
-video</a> (123 s, no pauses shortened) and its <a href="https://github.com/ahtx/kindi/releases/download/v0.1.0/kindi-demo.cast">asciicast</a> are in the release.</sub></p>
+video</a> (123 s, no pauses shortened) and its <a href="https://github.com/ahtx/kindi/releases/download/v0.1.0/kindi-demo.cast">asciicast</a> are in the 0.1.0 release.</sub></p>
 
-<p align="center"><img src="assets/kindi-speed.svg" alt="Speed on one Quadro K420: llama.cpp Vulkan 2.84 tokens/s, Kindi 20.8 (exact) and 22.9 (fast); prompt reading 2.99 vs 26.5" width="100%"></p>
+<p align="center"><img src="assets/kindi-speed.svg" alt="Write speed in tokens per second, Kindi 0.2.0 and llama.cpp on the same card with the same model file and context: Quadro K420 1 GB, 2B, 20.8 and 1.65; Quadro K1200, 2B, 81.0 and 20.8; 4B, 39.2 and 8.7; 9B, 23.4 and 5.9; two Quadro K1200 cards, 27B, 13.0 and 1.69; GeForce GTX 1080, 27B, 27.8 and 19.4 at 512 tokens, and 15.4 at 64,000 tokens, where llama.cpp runs out of memory; GeForce RTX 3080 at 190 W, 27B, 62.4 and 52.9 at 1K and 43.6 and 24.7 at 90K." width="100%"></p>
 
 By [Amir Husain](https://www.amirhusain.com). Watch the [launch video](https://youtu.be/ddAnghj8HpE) on YouTube.
 
+## Quick start: one command
+
+On Linux x86-64 with an NVIDIA card (Kepler to Ampere, one or two cards) or with no GPU:
+
+```bash
+curl -fsSL https://amirhusain.com/kindi/install.sh | bash
+```
+
+The script finds your cards and selects the model and the settings for them. It downloads the model and checks
+its sha256, converts it, checks that the output is token-for-token identical to llama.cpp, and starts the server
+on `127.0.0.1:8093`. It explains each step, and it asks before it installs Docker or the NVIDIA Container Toolkit.
+To see each step before anything changes, add `-s -- --dry-run` after `bash`. Run it again to upgrade or repair;
+`--uninstall` removes it. To check the script's sha256 before you run it, and for the model that each card gets,
+see [docs/INSTALL.md](docs/INSTALL.md).
+
+- [Quick start: one command](#quick-start-one-command)
 - [Requirements](#requirements)
 - [Install](#install) - with Docker, or natively
 - [Get the model and convert it](#get-the-model-and-convert-it)
@@ -44,14 +62,15 @@ By [Amir Husain](https://www.amirhusain.com). Watch the [launch video](https://y
 
 | | |
 |---|---|
-| GPU | NVIDIA Quadro K420 (GK107, 1 GB). We tuned Kindi's kernels for its single multiprocessor; we did not test other Kepler cards in 0.1.0. |
-| Driver | NVIDIA **470** series (the last driver branch with Kepler support) |
+| GPU | NVIDIA, compute capability 3.0 (Kepler) or later, one or two cards. Tested: Quadro K420 (1 GB and 2 GB), Quadro K1200 (one card, or two in tensor parallel), GeForce GTX 1080, GeForce RTX 3080. With no GPU, the CPU engine runs on x86-64 with AVX2. |
+| Driver | Kepler: the NVIDIA **470** series (the last driver branch with Kepler support). Later cards: a current driver. The image has CUDA 10.2; the host needs only the driver. |
 | OS | Linux x86-64 (developed on Ubuntu 24.04 with Docker; the image itself is Ubuntu 18.04) |
-| RAM / disk | 4 GB RAM or more; ~1.5 GB disk for the model and pack (+ ~4 GB for the Docker image) |
-| Software | Docker with the NVIDIA Container Toolkit - **or** CUDA 10.2 + Python 3.6 + CuPy 9.6 (see below) |
+| RAM / disk | 2B: 4 GB RAM, ~1.5 GB disk. 27B: ~14 GB of free RAM for its first start (two K1200 cards: ~5 GB) and ~19 GB of disk. The Docker image takes ~4 GB more. |
+| Software | Docker with the NVIDIA Container Toolkit (or the installer's device passthrough) - **or** CUDA 10.2 + Python 3.6 + CuPy 9.6 (see below) |
 
-The K420 must be free: Kindi uses about 870 MB of its 980 MB with the default 24,576-token context. A desktop
-session on the same card takes a few MB and is fine.
+[docs/CARDS.md](docs/CARDS.md) gives the model and the settings for each card. The card must be free: Kindi fits the
+context to the free card memory. On the K420 1 GB, Kindi uses about 870 MB of its 980 MB with the default
+24,576-token context. A desktop session on the same card takes a few MB and is fine.
 
 ## Install
 
@@ -62,18 +81,18 @@ exactly that.
 
 ```sh
 git clone https://github.com/ahtx/kindi.git && cd kindi
-docker build -t kindi:0.1.0 -f docker/Dockerfile .   # downloads the CUDA 10.2 toolkit (~2.5 GB), ~15 minutes
+docker build -t kindi:0.2.0 -f docker/Dockerfile .   # downloads the CUDA 10.2 toolkit (~2.5 GB), ~15 minutes
 ```
 
-You can also use the release archive. Download `kindi-0.1.0.tar.gz` from the
-[v0.1.0 release](https://github.com/ahtx/kindi/releases/tag/v0.1.0), then run
-`tar xzf kindi-0.1.0.tar.gz && cd kindi-0.1.0` and build the image with the same `docker build` command.
+You can also use the release archive. Download `kindi-0.2.0.tar.gz` from the
+[v0.2.0 release](https://github.com/ahtx/kindi/releases/tag/v0.2.0), then run
+`tar xzf kindi-0.2.0.tar.gz && cd kindi-0.2.0` and build the image with the same `docker build` command.
 
 Check that Docker sees the GPU (create `~/.kindi` first, so it belongs to you and not to root):
 
 ```sh
 mkdir -p ~/.kindi
-docker run --rm --gpus all -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.1.0 info
+docker run --rm --gpus all -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.2.0 info
 ```
 
 More in [docs/DOCKER.md](docs/DOCKER.md).
@@ -91,7 +110,9 @@ from elsewhere).
 
 ## Get the model and convert it
 
-Download Prism ML's PTQ1_0 file (430 MB, Apache 2.0) from Hugging Face:
+These steps use the 2B. For the 4B, 9B and 27B, use their PTQ1_0 files from the same publisher. The installer
+selects and downloads the right one; [docs/INSTALL.md](docs/INSTALL.md) lists the files and their sha256. Download
+Prism ML's PTQ1_0 file (430 MB, Apache 2.0) from Hugging Face:
 
 ```sh
 mkdir -p ~/.kindi && cd ~/.kindi
@@ -102,7 +123,7 @@ Convert it once into Kindi's weight pack (about a minute; exact - the same weigh
 
 ```sh
 # Docker
-docker run --rm -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.1.0 convert /data/Ternary-Bonsai-2-2B-PTQ1_0.gguf
+docker run --rm -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.2.0 convert /data/Ternary-Bonsai-2-2B-PTQ1_0.gguf
 # native
 python3 -m kindi convert ~/.kindi/Ternary-Bonsai-2-2B-PTQ1_0.gguf          # writes ~/.kindi/pack
 ```
@@ -110,7 +131,7 @@ python3 -m kindi convert ~/.kindi/Ternary-Bonsai-2-2B-PTQ1_0.gguf          # wri
 Check the engine against llama.cpp's reference output:
 
 ```sh
-docker run --rm --gpus all -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.1.0 verify
+docker run --rm --gpus all -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.2.0 verify
 ```
 
 ```
@@ -129,18 +150,18 @@ measures the generation speed (see [Performance](#performance)).
 Optional - build the cluster file for the fast output head (about 2 minutes):
 
 ```sh
-docker run --rm --gpus all -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.1.0 fast-head
+docker run --rm --gpus all -u $(id -u):$(id -g) -v ~/.kindi:/data kindi:0.2.0 fast-head
 ```
 
 ## Run the server
 
 ```sh
 docker run -d --name kindi --restart unless-stopped --gpus all -u $(id -u):$(id -g) \
-    -p 127.0.0.1:8093:8093 -v ~/.kindi:/data kindi:0.1.0
+    -p 127.0.0.1:8093:8093 -v ~/.kindi:/data kindi:0.2.0
 # native:  python3 -m kindi serve
 ```
 
-The first start compiles Kindi's CUDA kernels for the K420 (about 1.5 minutes). Kindi caches them under
+The first start compiles Kindi's CUDA kernels for your card (about 1.5 minutes on the K420). Kindi caches them under
 `state_dir`, and later starts take about 10 seconds. Then:
 
 ```sh
@@ -183,11 +204,11 @@ Responses carry OpenAI `usage` (with `prompt_tokens_details.cached_tokens`) and 
 `role: "tool"` messages.
 
 **Agents and chat UIs.** Point any OpenAI-compatible client at `http://localhost:8093/v1` with model `bonsai2-2b`.
-Two settings matter for this card - see [docs/AGENTS.md](docs/AGENTS.md):
+Two settings matter on the smaller cards - see [docs/AGENTS.md](docs/AGENTS.md):
 - Give the client a **long request timeout**. An agent's first prompt of 5,000+ tokens takes a few minutes to read the
   first time. The cache makes later turns fast. Do not use automatic retries, because they queue behind the current
   request.
-- Tell the client that the context window is **24,576** tokens (or what you configured).
+- Tell the client the context window that `/health` shows (on the K420 1 GB: **24,576** tokens).
 
 `kindi chat` is a terminal chat that needs no server.
 
@@ -253,11 +274,20 @@ Quadro K420, Ternary-Bonsai-2-2B, `kindi bench`:
 | generation at 24,000 | 15.4 | 17.0 |
 | prompt read speed | 26.5 tokens/s | 26.5 |
 
-<p align="center"><img src="assets/kindi-context.svg" alt="Generation speed by position in a 24,576-token context: exact head from 20.8 down to 15.4 tokens/s, fast head from 22.9 to 17.0; llama.cpp 2.8 at short context" width="100%"></p>
+The other cards, at a short context, exact head:
 
-For comparison, llama.cpp runs the same model on the same card (Vulkan build, all layers on the GPU). It generates
-2.8 tokens/s and reads prompts at 3.0 tokens/s. Method, comparison and context: [docs/BENCHMARKS.md](docs/BENCHMARKS.md).
+| Card | Model | Generation | Prompt reading (512 tokens) |
+|---|---|---|---|
+| Quadro K1200 | 2B / 4B / 9B | 81.0 / 39.2 / 23.4 tokens/s | 194.5 / 77.4 / 41.7 tokens/s |
+| 2x Quadro K1200 | 27B | 13.0 | 21.0 |
+| GeForce GTX 1080 | 27B | 27.8 | 250.9 |
+| GeForce RTX 3080 (190 W) | 27B | 62.4 (100 with the 2B draft model, on agent prompts) | 1,069 |
+
+llama.cpp on the same card, with the same model file and the same context: on the K420, it generates 1.65
+tokens/s and reads prompts at 1.2 tokens/s (512 tokens). The tables for each card, with their method, are in
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md).
 How Kindi works: [docs/HOW-IT-WORKS.md](docs/HOW-IT-WORKS.md).
+The settings for each tested card (K420, K1200, GTX 1080, RTX 3080, CPU): [docs/CARDS.md](docs/CARDS.md).
 
 ## Agent benchmark
 
@@ -267,21 +297,21 @@ the results of our runs with Kindi on the K420. kbench works with any OpenAI-com
 ## Limits
 
 - **One request at a time.** Concurrent requests queue (the card holds one engine).
-- **Kindi reads prompts at about 26 tokens/s**, so a long new prompt takes time. A new prompt of 5,000 tokens takes
-  about 3 minutes. The cache makes repeated prompts fast. Kindi reads text that is not in the cache (for example, a
-  large file or long command output) at this speed.
-- **One model.** 0.1.0 runs Ternary-Bonsai-2-2B (the PTQ1_0 GGUF) only.
-- **One GPU.** Tuned for the K420's single multiprocessor; larger Kepler or Maxwell cards would run but use one
-  multiprocessor only.
-- **A 2B model.** Good at short code, shell and factual questions, tool calls and summaries; it makes the mistakes of
-  its size - check what it writes.
+- **On the K420, Kindi reads prompts at about 25-33 tokens/s**, so a long new prompt takes time. A new prompt of
+  5,000 tokens takes about 3 minutes there. The cache makes repeated prompts fast. Kindi reads text that is not in
+  the cache (for example, a large file or long command output) at this speed.
+- **The Ternary-Bonsai-2 models only** (the PTQ1_0 GGUFs: 2B, 4B, 9B, 27B). The 27B needs 8 GB of card memory (GTX
+  1080, RTX 3080) or two 4 GB cards (2x K1200).
+- **At most two GPUs per model.** Two cards run one model in tensor parallel. More cards run more servers.
+- **Small models make mistakes.** The 2B is good at short code, shell and factual questions, tool calls and
+  summaries. Check what it writes.
 
 ## Troubleshooting
 
 See [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md). The usual causes are:
 
-- Another program uses the K420 (out of memory at start).
-- The driver is not the 470 branch.
+- Another program uses the card (out of memory at start).
+- On Kepler, the driver is not the 470 branch.
 - A client timed out while it waited for a long first prompt.
 
 ## About

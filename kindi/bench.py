@@ -6,10 +6,10 @@ import time
 def run(cfg, log=print):
     import cupy as cp
     import numpy as np
-    from .engine import Engine
+    from .engine import make_engine
     pack = cfg["pack"]
     cl = os.path.join(pack, "head_clusters.npz")
-    eng = Engine(pack, ctx=cfg["ctx"], clusters=dict(np.load(cl)) if os.path.exists(cl) else None, log=log)
+    eng = make_engine(pack, ctx=cfg["ctx"], clusters=dict(np.load(cl)) if os.path.exists(cl) else None, log=log)
     free, total = cp.cuda.runtime.memGetInfo()
     log("GPU memory: %.0f MiB free of %.0f with a %d-token context" % (free / 2 ** 20, total / 2 ** 20, eng.ctx))
     eng.reset()

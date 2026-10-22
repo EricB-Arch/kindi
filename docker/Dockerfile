@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends wget ca-certifi
     && rm -rf /var/lib/apt/lists/*
 
 # CUDA 10.2 toolkit (runtime libraries, cuBLAS, NVRTC - Kindi compiles its kernels at first start)
-RUN wget -q https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run \
+RUN wget -q --tries=5 --timeout=30 https://developer.download.nvidia.com/compute/cuda/10.2/Prod/local_installers/cuda_10.2.89_440.33.01_linux.run \
     && sh cuda_10.2.89_440.33.01_linux.run --silent --toolkit --no-opengl-libs --override \
     && rm -f cuda_10.2.89_440.33.01_linux.run \
     && rm -rf /usr/local/cuda-10.2/doc /usr/local/cuda-10.2/samples /usr/local/cuda-10.2/nsight* \
@@ -25,7 +25,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends gcc python3-dev
     && python3 -m pip install --no-cache-dir --upgrade "pip<21.4" "setuptools<60" \
     && python3 -m pip install --no-cache-dir "numpy==1.19.5" "fastrlock==0.8.3" "cupy-cuda102==9.6.0" \
        "fastapi==0.79.1" "uvicorn==0.16.0" "pydantic==1.9.2" \
-    && apt-get purge -y gcc python3-dev && apt-get autoremove -y \
+    && apt-get purge -y python3-dev && apt-get autoremove -y \
     && apt-get install -y --no-install-recommends libgomp1 && rm -rf /var/lib/apt/lists/*
 
 COPY kindi /opt/kindi/kindi

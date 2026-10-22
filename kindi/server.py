@@ -19,7 +19,7 @@ import uuid
 
 import numpy as np
 
-from . import __version__, chat
+from . import COMMIT, __version__, chat
 from .cache import Cancelled, Runner
 from .engine import EOS
 from .sampling import Sampler
@@ -28,12 +28,29 @@ from .sampling import Sampler
 THINK_CLOSE = "\n\nI have thought enough; time to act.\n</think>\n\n"
 
 
+def _looping(gen, min_span=240):
+    """True when the last tokens are one block of 4..256 tokens repeated (at least 4 times and min_span tokens):
+    a model stuck in a loop. Short legitimate repeats (table rules, a few identical lines) stay below it."""
+    n = len(gen)
+    for P in range(4, 257):
+        reps = max(4, -(-min_span // P))
+        if P * reps > n:
+            break
+        tail = gen[n - P:]
+        if all(gen[n - (k + 1) * P:n - k * P] == tail for k in range(1, reps)):
+            return True
+    return False
+
+
 class Kindi(object):
     """Engine + tokenizer + cache + sampler, shared by the HTTP layer and `kindi chat`."""
 
     def __init__(self, cfg, log=print):
-        import cupy as cp
-        from .engine import Engine
+        try:
+            import cupy as cp
+        except ImportError:              # a CPU-only host (KINDI_DEVICE=cpu)
+            cp = None
+        from .engine import make_engine
         from .tokenizer import Tok
         self.cp, self.cfg, self.log = cp, cfg, log
         pack = cfg["pack"]
@@ -41,11 +58,12 @@ class Kindi(object):
             raise SystemExit("kindi: no model pack at %s - run: kindi convert <model.gguf>" % pack)
         man = json.load(open(os.path.join(pack, "kindi_pack.json")))
         self.pack_id = (man.get("source_sha256") or "pack")[:12]
+        self.variant = chat.template_variant(pack)      # qwen35 (2B/4B/9B) or bonsai27 (the 27B template)
         clusters = None
         cl_path = os.path.join(pack, "head_clusters.npz")
         if os.path.exists(cl_path):
             clusters = dict(np.load(cl_path))
-        self.eng = Engine(pack, ctx=cfg["ctx"], clusters=clusters, log=log)
+        self.eng = make_engine(pack, ctx=cfg["ctx"], clusters=clusters, log=log)
         self.tok = Tok(self.eng.vocab, os.path.join(pack, "merges.txt"))
         self.busy = {"active": False, "phase": "", "prompt_tokens": 0, "cached": 0, "read": 0, "generated": 0,
                      "started": 0.0}
@@ -65,6 +83,14 @@ class Kindi(object):
             pass
         return self.cfg["head"]
 
+    def _pick(self, nxt, temperature, top_p, top_k, rng):
+        """the next token: already drawn by speculative sampling, or sampled now"""
+        ps = getattr(self.eng, "spec_presampled", None)
+        if ps is not None:
+            self.eng.spec_presampled = None
+            return ps
+        return self.sample(nxt, temperature, top_p, top_k, rng)
+
     def generate(self, req, cancel=None):
         """Yields ("text", piece) while generating, then ("done", info). cancel: a threading.Event set when the
         client disconnects (prompt reading and generation stop at the next token)."""
@@ -81,6 +107,7 @@ class Kindi(object):
         top_p = float(g("top_p", cfg["top_p"]))
         top_k = int(g("top_k", cfg["top_k"]))
         max_new = int(req.get("max_tokens") or req.get("max_completion_tokens") or cfg["max_tokens"])
+        repeat_stop = bool(cfg.get("repeat_stop"))
         stops = req.get("stop") or []
         if isinstance(stops, str):
             stops = [stops]
@@ -90,7 +117,10 @@ class Kindi(object):
         self.eng.shortlist = cfg["fast_clusters"] if fast else 0
         seed = req.get("seed")
         rng = np.random.RandomState(seed if seed is not None else int(time.time() * 1000) % 2 ** 31)
-        body, gp = chat.render(messages, tools, think)
+        kw = req.get("chat_template_kwargs") or {}
+        effort = req.get("reasoning_effort") or kw.get("reasoning_effort") or cfg.get("reasoning_effort") or None
+        body, gp = chat.render(messages, tools, think, variant=self.variant, reasoning_effort=effort,
+                               preserve_thinking=kw.get("preserve_thinking"))
         Tb = self.tok.encode(body)
         T = Tb + self.tok.encode(gp)
         ctx = self.eng.ctx
@@ -115,6 +145,8 @@ class Kindi(object):
         t1 = time.time()
         self.log("prompt: %d reused, %d read in %.1fs" % (cached, len(T) - cached, t1 - t0))
         self.busy["phase"] = "generating"
+        if hasattr(self.eng, "spec_begin"):
+            self.eng.spec_begin(temperature <= 0, temperature, top_p, top_k, rng)   # speculative decoding (KINDI_SPEC)
         dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
         text, gen, finish = "", [], "length"
         # while thinking, pieces go out as ("reasoning", ...) - the last 8 characters are held back in case they are
@@ -164,7 +196,14 @@ class Kindi(object):
                     yield item
                 if len(gen) >= max_new:
                     break
+                loop = repeat_stop and len(gen) % 16 == 0 and _looping(gen)
+                if loop and not st["think"]:
+                    self.log("stopped a repeating loop after %d tokens" % len(gen))
+                    finish = "length"
+                    break
                 nxt = self.runner.step(tok)
+                if loop and st["think"] and not st["forced"]:
+                    budget = len(gen)                         # a loop in the thinking: close it now, then answer
                 if st["think"] and budget and len(gen) >= budget and not st["forced"]:
                     # thinking budget spent: close the thinking for the model, then let it answer
                     st["forced"] = True
@@ -176,9 +215,15 @@ class Kindi(object):
                         for item in route(piece):
                             yield item
                         nxt = self.runner.step(ft)
-                tok = self.sample(nxt, temperature, top_p, top_k, rng)
+                tok = self._pick(nxt, temperature, top_p, top_k, rng)
         finally:
+            sp = self.eng.spec_end() if hasattr(self.eng, "spec_end") else None
             self.busy["active"] = False
+            if hasattr(self.runner, "idle"):
+                self.runner.idle()                            # (KINDI_CKPT_VRAM: checkpoint host copies now)
+        if sp and sp["passes"]:
+            self.log("speculative: %d tokens in %d passes, %d of %d drafted tokens accepted" % (
+                len(gen), sp["passes"], sp["accepted"], sp["drafted"]))
         if st["think"] and len(text) > st["sent"]:
             yield "reasoning", text[st["sent"]:]
         t2 = time.time()
@@ -219,14 +264,16 @@ def create_app(cfg, log=print):
 
     @app.get("/health")
     def health():
-        free, total = K.cp.cuda.runtime.memGetInfo()
+        free = total = 0
+        if K.cp is not None and os.environ.get("KINDI_DEVICE", "gpu") != "cpu":
+            free, total = K.cp.cuda.runtime.memGetInfo()
         b = K.busy
         busy = None
         if b["active"] and K.lock.locked():
             busy = {"phase": b["phase"], "elapsed_s": round(time.time() - b["started"]),
                     "prompt_tokens": b["prompt_tokens"], "reused": b["cached"],
                     "prompt_read": "%d/%d" % (b["read"], b["prompt_tokens"] - b["cached"]), "generated": b["generated"]}
-        return {"ok": True, "kindi": __version__, "model": model_id, "ctx": K.eng.ctx, "head": K.head_mode(),
+        return {"ok": True, "kindi": __version__, "commit": COMMIT, "model": model_id, "ctx": K.eng.ctx, "head": K.head_mode(),
                 "uptime_s": round(time.time() - K.t0), "busy": busy, "stats": K.stats,
                 "gpu_free_mib": round(free / 1048576.0), "gpu_total_mib": round(total / 1048576.0)}
 
@@ -311,7 +358,13 @@ def create_app(cfg, log=print):
                 fut = loop.run_in_executor(None, pump)
                 try:
                     while True:
-                        item = await q.get()
+                        # while a long prompt is read, nothing else is sent: an SSE comment every 15 s keeps the
+                        # stream alive (Node's fetch, which pi uses, drops a body that is silent for 300 s)
+                        try:
+                            item = await asyncio.wait_for(q.get(), timeout=15)
+                        except asyncio.TimeoutError:
+                            yield ": keep-alive\n\n"
+                            continue
                         if item is END:
                             break
                         yield item

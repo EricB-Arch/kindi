@@ -8,7 +8,7 @@
   kindi chat                    chat in the terminal (no server needed)
   kindi head exact|fast         choose the output head of a running server (next request, no restart)
   kindi info                    show the configuration, the pack and the GPU
-Global options: --config FILE, --pack DIR, --state-dir DIR, --ctx N (see kindi.conf.example)."""
+Global options: --config FILE, --pack DIR, --state-dir DIR, --ctx N."""
 import argparse
 import json
 import os
@@ -36,6 +36,8 @@ def _setup_gpu_env(cfg):
 
 
 def cmd_convert(cfg, a):
+    if not a.gguf:
+        raise SystemExit("kindi convert: give the model GGUF")
     from .convert import convert
     out = a.out or cfg["pack"]
     if os.path.exists(os.path.join(out, "kindi_pack.json")) and not a.force:
@@ -142,7 +144,19 @@ def cmd_info(cfg, a):
     return 0
 
 
+def _malloc_tuning():
+    """Checkpoints are dozens of 2 MB host arrays per state copy. glibc raises its mmap threshold as large blocks are
+    freed, after which such arrays come from the heap of each thread and are never given back (a 9B server grew by
+    ~60 MB per request). A fixed 1 MB threshold keeps every such array in its own mapping, returned when freed."""
+    try:
+        import ctypes
+        ctypes.CDLL("libc.so.6").mallopt(-3, 1 << 20)       # M_MMAP_THRESHOLD = -3
+    except (OSError, AttributeError):
+        pass                                               # not glibc: nothing to tune
+
+
 def main(argv=None):
+    _malloc_tuning()
     p = argparse.ArgumentParser(prog="kindi", description="Kindi %s - ternary LLM engine for the Quadro K420" % __version__)
     p.add_argument("--config")
     p.add_argument("--pack")
@@ -151,7 +165,7 @@ def main(argv=None):
     p.add_argument("--version", action="version", version="kindi " + __version__)
     sub = p.add_subparsers(dest="cmd")
     s = sub.add_parser("convert", help="build the weight pack from the GGUF")
-    s.add_argument("gguf")
+    s.add_argument("gguf", nargs="?")
     s.add_argument("--out", help="pack directory (default: the configured pack)")
     s.add_argument("--force", action="store_true")
     s = sub.add_parser("fast-head", help="build the fast-head cluster file")

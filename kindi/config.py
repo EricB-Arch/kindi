@@ -5,7 +5,9 @@ The config file is INI with a [kindi] section; it is looked for at --config, $KI
 ~/.kindi/kindi.conf, in that order. See kindi.conf.example for every key.
 """
 import configparser
+import json
 import os
+import re
 
 DEFAULTS = {
     # where things live
@@ -15,7 +17,7 @@ DEFAULTS = {
     "host": "127.0.0.1",                # 0.0.0.0 to serve the LAN
     "port": "8093",
     "api_key": "",                      # if set, clients must send Authorization: Bearer <api_key>
-    "model_name": "bonsai2-2b",         # the id reported by /v1/models
+    "model_name": "auto",              # infer the reported id from the selected pack
     # engine
     "ctx": "24576",                     # context length in tokens (K420: 24576 max with a safety margin)
     "head": "exact",                    # exact | fast (shortlist head, ~15% faster, approximate)
@@ -25,6 +27,9 @@ DEFAULTS = {
     "prefix_max": "8",                  # saved prompt openings kept on disk
     "prefix_min": "512",                # smallest opening worth saving (tokens)
     "park_max": "3",                    # other conversations kept in host RAM
+    "checkpoint_budget_mb": "0",        # host RAM for checkpoints and parked conversations (0: 20% of the RAM)
+    "repeat_stop": "0",                 # 1: stop a reply caught in a repeating loop (close it while thinking)
+    "reasoning_effort": "",             # 27B template: xhigh | medium | low (empty: the template default, xhigh)
     # generation defaults (a request's own values win)
     "max_tokens": "1024",
     "temperature": "0.7",
@@ -32,7 +37,7 @@ DEFAULTS = {
     "top_k": "20",
 }
 
-INT_KEYS = {"port", "ctx", "fast_clusters", "checkpoint_every", "prefix_max", "prefix_min", "park_max",
+INT_KEYS = {"repeat_stop", "port", "ctx", "fast_clusters", "checkpoint_every", "checkpoint_budget_mb", "prefix_max", "prefix_min", "park_max",
             "max_tokens", "top_k"}
 FLOAT_KEYS = {"temperature", "top_p"}
 PATH_KEYS = {"pack", "state_dir"}
@@ -93,6 +98,11 @@ def load(explicit=None, overrides=None):
             cfg[k] = os.path.abspath(os.path.expanduser(v))
         else:
             cfg[k] = v
+    if cfg["model_name"] == "auto":
+        manifest = os.path.join(cfg["pack"], "kindi_pack.json")
+        model = json.load(open(manifest)).get("model", "") if os.path.isfile(manifest) else ""
+        size = re.search(r"(\d+(?:\.\d+)?)b\b", model.lower())          # Ternary-Bonsai-2-9B -> 9b
+        cfg["model_name"] = "bonsai2-%sb" % (size.group(1) if size else "2")
     if cfg["head"] not in ("exact", "fast"):
         raise SystemExit("kindi: head must be exact or fast, not %r" % cfg["head"])
     cfg["source"] = source or "(built-in defaults)"

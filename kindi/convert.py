@@ -1,4 +1,4 @@
-"""kindi convert: Ternary-Bonsai-2-2B PTQ1_0 GGUF -> Kindi weight pack. Exact (same information, new layout).
+"""kindi convert: supported Ternary-Bonsai-2 PTQ1_0 GGUF -> Kindi weight pack. Exact (same information, new layout).
 
 Ternary tensors (GGUF type 143 = PTQ1_0: per 128 weights, qs[24] | qh[2] | fp16 scale d; 5 trits per byte) are
 re-coded 4 trits per byte (byte = t0 + 3 t1 + 9 t2 + 27 t3, t in {0,1,2}, weight = (t-1) * d) and laid out
@@ -19,9 +19,14 @@ import numpy as np
 from . import __version__
 from .gguf import GGUF
 
-PTQ1_0, F32 = 143, 0
+PTQ1_0, F32, BF16 = 143, 0, 30
 POW3 = np.array([1, 3, 9, 27, 81, 243], dtype=np.uint32)
-EXPECT = {"general.architecture": "qwen35", "qwen35.block_count": 24, "qwen35.embedding_length": 2048}
+PROFILES = {
+    (24, 2048, 6144, 8, 2, 16): "Ternary-Bonsai-2-2B",
+    (32, 2560, 9216, 16, 4, 16): "Ternary-Bonsai-2-4B",
+    (32, 4096, 12288, 16, 4, 16): "Ternary-Bonsai-2-9B",
+    (64, 5120, 17408, 24, 4, 16): "Ternary-Bonsai-2-27B",
+}
 PACK_FORMAT = 1
 
 
@@ -70,12 +75,15 @@ def convert(gguf_path, out_dir, log=print):
     t0 = time.time()
     selftest()
     g = GGUF(gguf_path)
-    for k, v in EXPECT.items():
-        if g.kv.get(k) != v:
-            raise SystemExit("kindi convert: %s is %r, expected %r - this release supports Ternary-Bonsai-2-2B"
-                             % (k, g.kv.get(k), v))
+    if g.kv.get("general.architecture") != "qwen35":
+        raise SystemExit("kindi convert: expected a qwen35 GGUF")
+    profile = (g.kv.get("qwen35.block_count"), g.kv.get("qwen35.embedding_length"),
+               g.kv.get("qwen35.feed_forward_length"), g.kv.get("qwen35.attention.head_count"),
+               g.kv.get("qwen35.attention.head_count_kv"), g.kv.get("qwen35.ssm.group_count"))
+    if profile not in PROFILES:
+        raise SystemExit("kindi convert: unsupported Ternary-Bonsai-2 dimensions %r" % (profile,))
     types = {t[2] for t in g.tensors}
-    if not types <= {PTQ1_0, F32}:
+    if not types <= {PTQ1_0, F32, BF16}:
         raise SystemExit("kindi convert: needs the PTQ1_0 GGUF (found tensor types %s)" % sorted(types))
     hd = {k.split("prism.hadamard.")[-1]: v for k, v in g.kv.items() if k.startswith("prism.hadamard.")}
     sv = np.array(hd["sign_values"], dtype=np.float32)
@@ -87,8 +95,8 @@ def convert(gguf_path, out_dir, log=print):
     if hd.get("tied_output"):
         folded |= set(hd.get("inverse_weight_names", []))
     os.makedirs(out_dir, exist_ok=True)
-    signs[2048].astype("<f4").tofile(os.path.join(out_dir, "signs_2048.f32"))
-    signs[6144].astype("<f4").tofile(os.path.join(out_dir, "signs_6144.f32"))
+    for width, values in signs.items():
+        values.astype("<f4").tofile(os.path.join(out_dir, "signs_%d.f32" % width))
     with open(os.path.join(out_dir, "vocab.json"), "w") as f:
         json.dump(g.kv["tokenizer.ggml.tokens"], f)
     with open(os.path.join(out_dir, "merges.txt"), "w", encoding="utf-8") as f:
@@ -129,7 +137,11 @@ def convert(gguf_path, out_dir, log=print):
             dpm_off += rows * bpr * 2
         else:
             n = rows * ne0
-            ff.write(np.frombuffer(src.read(4 * n), dtype="<f4").tobytes())
+            if ty == BF16:                      # the 27B stores ssm_alpha / ssm_beta in bf16: widen exactly to f32
+                v = np.frombuffer(src.read(2 * n), dtype="<u2").astype(np.uint32) << 16
+                ff.write(v.astype("<u4").tobytes())
+            else:
+                ff.write(np.frombuffer(src.read(4 * n), dtype="<f4").tobytes())
             rec.update({"f32_off": f32_off, "nfloats": n})
             f32_off += 4 * n
         index["tensors"][name] = rec
@@ -146,7 +158,20 @@ def convert(gguf_path, out_dir, log=print):
     manifest = {"kindi_version": __version__, "pack_format": PACK_FORMAT, "model": g.kv.get("general.name"),
                 "source_file": os.path.basename(gguf_path), "source_sha256": sha256(gguf_path),
                 "tensors": n_t, "bcodes_bytes": bc_off, "dpm_bytes": dpm_off, "f32_bytes": f32_off,
-                "vocab": len(g.kv["tokenizer.ggml.tokens"]), "context_length": g.kv.get("qwen35.context_length")}
+                "vocab": len(g.kv["tokenizer.ggml.tokens"]), "context_length": g.kv.get("qwen35.context_length"),
+                "dimensions": {"layers": profile[0], "width": profile[1], "ffn": profile[2],
+                               "heads": profile[3], "kv_heads": profile[4], "groups": profile[5],
+                               "head_dim": g.kv["qwen35.attention.key_length"],
+                               "rope_dim": g.kv["qwen35.rope.dimension_count"],
+                               "state_size": g.kv["qwen35.ssm.state_size"],
+                               "gdn_inner": g.kv["qwen35.ssm.inner_size"],
+                               "rope_base": g.kv["qwen35.rope.freq_base"],
+                               "full_attention_interval": g.kv["qwen35.full_attention_interval"]},
+                # Hadamard block of the folded inputs (prism v2: 512, v1: e.g. 4096) and the output head tensor
+                "hadamard_block": int(hd.get("block_size", 512)),
+                "head": "output.weight" if any(t[0] == "output.weight" for t in g.tensors) else "token_embd.weight",
+                # the chat template: the 27B's differs from the 2B/4B/9B one (chat.template_variant)
+                "chat_template": g.kv.get("tokenizer.chat_template", "")}
     with open(os.path.join(out_dir, "kindi_pack.json"), "w") as f:
         json.dump(manifest, f, indent=2)
     log("pack written to %s (%.0f MB) in %.0fs" % (out_dir, (bc_off + dpm_off + f32_off) / 1e6, time.time() - t0))
