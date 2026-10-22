@@ -1,4 +1,4 @@
-<p align="center"><img src="assets/kindi-banner.svg" alt="Kindi - a modern 2B-parameter LLM at 20+ tokens/s on a 2014 NVIDIA Quadro K420 with 1 GB" width="100%"></p>
+<p align="center"><img src="assets/kindi-banner.svg" alt="Kindi 0.2.0: modern 2B to 27B language models on low-cost NVIDIA cards, from a 1 GB Quadro K420 to an RTX 3080. Two Quadro K1200 cards work as one 8 GB card." width="100%"></p>
 
 # Kindi 0.2.0
 
@@ -22,7 +22,7 @@ connected to <code>kindi serve</code> on one Quadro K420, default settings. Toke
 shortened pauses longer than 2.5 s. The <a href="https://github.com/ahtx/kindi/releases/download/v0.1.0/kindi-demo-untrimmed.mp4">full
 video</a> (123 s, no pauses shortened) and its <a href="https://github.com/ahtx/kindi/releases/download/v0.1.0/kindi-demo.cast">asciicast</a> are in the 0.1.0 release.</sub></p>
 
-<p align="center"><img src="assets/kindi-speed.svg" alt="One Quadro K420, Ternary-Bonsai-2-2B, the same model file, a 512-token context: generation llama.cpp 1.65 tokens/s, Kindi 20.8; prompt reading llama.cpp 1.2, Kindi 33.3" width="100%"></p>
+<p align="center"><img src="assets/kindi-speed.svg" alt="Write speed in tokens per second, Kindi 0.2.0 and llama.cpp on the same card with the same model file and context: Quadro K420 1 GB, 2B, 20.8 and 1.65; Quadro K1200, 2B, 81.0 and 20.8; 4B, 39.2 and 8.7; 9B, 23.4 and 5.9; two Quadro K1200 cards, 27B, 13.0 and 1.69; GeForce GTX 1080, 27B, 27.8 and 19.4 at 512 tokens, and 15.4 at 64,000 tokens, where llama.cpp runs out of memory; GeForce RTX 3080 at 190 W, 27B, 62.4 and 52.9 at 1K and 43.6 and 24.7 at 90K." width="100%"></p>
 
 By [Amir Husain](https://www.amirhusain.com). Watch the [launch video](https://youtu.be/ddAnghj8HpE) on YouTube.
 
