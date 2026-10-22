@@ -13,7 +13,7 @@ exactly this chip.
 | llama.cpp (Vulkan build, all layers on the GPU) | 1.65 tokens/s | 1.2 tokens/s |
 | **Kindi 0.2.0** (exact head) | **20.8 tokens/s** | **33.3 tokens/s** |
 
-<p align="center"><img src="assets/kindi-speed.svg" alt="Speed comparison on one Quadro K420" width="100%"></p>
+<p align="center"><img src="assets/kindi-speed.svg" alt="Write speed in tokens per second, Kindi 0.2.0 and llama.cpp on the same card with the same model file and context: Quadro K420 1 GB, 2B, 20.8 and 1.65; Quadro K1200, 2B, 81.0 and 20.8; 4B, 39.2 and 8.7; 9B, 23.4 and 5.9; two Quadro K1200 cards, 27B, 13.0 and 1.69; GeForce GTX 1080, 27B, 27.8 and 19.4 at 512 tokens, and 15.4 at 64,000 tokens, where llama.cpp runs out of memory; GeForce RTX 3080 at 190 W, 27B, 62.4 and 52.9 at 1K and 43.6 and 24.7 at 90K." width="100%"></p>
 
 Kindi is about **12x faster than llama.cpp when it generates text and 28x faster when it reads a prompt**. Both
 engines use the same card, the same model file and the same context. At 8,192 tokens, llama.cpp stopped with a Vulkan
