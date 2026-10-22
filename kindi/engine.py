@@ -23,7 +23,27 @@ DEFAULT_DIMS = {"layers": 24, "width": 2048, "ffn": 6144, "heads": 8, "kv_heads"
                 "rope_base": 1e7, "full_attention_interval": 4}
 EOS = (248044, 248046)
 FIRST_SPECIAL = 248044                 # Qwen3.5 vocabulary: ids 248044.. are the special / control tokens
-CU = os.path.join(os.path.dirname(os.path.abspath(__file__)), "kindi.cu")
+
+
+def select_cuda_source():
+    base = os.path.dirname(os.path.abspath(__file__))
+    if cp is not None:       
+    try:
+        prop = cp.cuda.runtime.getDeviceProperties(cp.cuda.Device().id)
+        major = int(prop["major"])
+        minor = int(prop["minor"])
+        
+        for name in (f"kindi_sm{major}{minor}.cu", f"kindi_sm{major}0.cu"):
+        path = os.path.join(base, name)
+        if os.path.exists(path):
+            return path
+    except Exception:
+        pass
+        
+    return os.path.join(base, "kindi.cu")
+
+CU = select_cuda_source()
+
 KERNELS = ("k_g4", "k_g4l", "k_fold_fwht", "k_rmsfold", "k_smfold", "k_l2w", "k_rmsw", "k_gdn_gates",
            "k_gdn_conv", "k_gdn_delta", "k_rope", "k_deq_emb3", "k_attn_s4w", "k_softmax_rows", "k_attn_v4p",
            "k_attn_comb", "k_argmax", "k_sumparts", "k_fwht_hi", "k_expand", "k_mask_neg", "k_band", "k_topk",
