@@ -8,17 +8,22 @@ and about 24 GB/s of usable memory bandwidth. Modern inference stacks have left 
 dropped Kepler, and general-purpose engines that still run on it are very slow. We wrote Kindi from scratch for
 exactly this chip.
 
-| On one Quadro K420, Ternary-Bonsai-2-2B | generation speed | prompt speed |
+| One Quadro K420, Ternary-Bonsai-2-2B, the same model file, a 512-token context | generation speed | prompt speed |
 |---|---|---|
-| llama.cpp (Vulkan build, all layers on the GPU) | 2.8 tokens/s | 3.0 tokens/s |
-| **Kindi 0.1.0** | **20.8 tokens/s** (exact) - **23 tokens/s** (fast head) | **26.5 tokens/s** |
+| llama.cpp (Vulkan build, all layers on the GPU) | 1.65 tokens/s | 1.2 tokens/s |
+| **Kindi 0.2.0** (exact head) | **20.8 tokens/s** | **33.3 tokens/s** |
 
 <p align="center"><img src="assets/kindi-speed.svg" alt="Speed comparison on one Quadro K420" width="100%"></p>
 
-Kindi is about **7x faster than llama.cpp when it generates text and 9x faster when it reads a prompt**. Both
-engines use the same card and the same model file. Kindi's default output is also **token-for-token identical to llama.cpp's**
-(`kindi verify` checks it). We searched and found no published result that shows any modern language model on a K420
+Kindi is about **12x faster than llama.cpp when it generates text and 28x faster when it reads a prompt**. Both
+engines use the same card, the same model file and the same context. At 8,192 tokens, llama.cpp stopped with a Vulkan
+error; Kindi runs to 24,576 tokens on this card. The fast head gives about 23 tokens/s. Kindi's default output is
+also **token-for-token identical to llama.cpp's** (`kindi verify` checks it). We searched and found no published result that shows any modern language model on a K420
 at anything close to this speed (see [docs/BENCHMARKS.md](docs/BENCHMARKS.md)).
+
+Version 0.2.0 also runs the 4B, 9B and 27B models on newer cards: the Quadro K1200 (one or two), the GeForce GTX
+1080 and the GeForce RTX 3080, and the 2B to 9B on the CPU. [docs/CARDS.md](docs/CARDS.md) has the settings, and
+[docs/BENCHMARKS.md](docs/BENCHMARKS.md) has the comparisons for each card.
 
 ## What you get
 

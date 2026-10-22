@@ -1,10 +1,14 @@
-"""Chat template and tool calls for Ternary-Bonsai-2-2B (Qwen3.5 template from the model file, rendered directly and
+"""Chat template and tool calls for Ternary-Bonsai-2 Qwen3.5 models (template from the model file, rendered directly and
 checked byte for byte against jinja2 with order-preserving tojson, as llama.cpp and Hugging Face render it).
 
-render(messages, tools, enable_thinking) -> (prompt body, generation prompt). Tools go in a <tools> block of JSON
+render(messages, tools, enable_thinking, variant=..., reasoning_effort=..., preserve_thinking=...) -> (prompt
+body, generation prompt). Two template variants: "qwen35" (Ternary-Bonsai-2 2B/4B/9B) and "bonsai27"
+(Ternary-Bonsai-2-27B: reasoning-effort instructions in the system prompt, past reasoning kept, no </think>
+splitting of content, scalar tool arguments as JSON); template_variant() picks one from the pack. Tools go in a <tools> block of JSON
 schemas; the model calls them as <tool_call><function=NAME><parameter=K>V</parameter></function></tool_call>, which
 parse_tool_calls() turns into OpenAI tool_calls."""
 import json
+import os
 import re
 import uuid
 
@@ -37,8 +41,37 @@ def _argval(v):
     return str(v)
 
 
-def render(messages, tools=None, enable_thinking=False):
+REASONING_EFFORTS = {
+    "xhigh": ("Reasoning effort is set to xhigh. Please think carefully through the task, validate key assumptions, "
+              "consider plausible alternatives, and prioritize correctness, consistency, and clarity in the final answer."),
+    "medium": "",
+    "low": ("Reasoning effort is set to low. Keep your thinking brief and focused, moving directly to the conclusion "
+            "without unnecessary elaboration."),
+}
+
+
+def template_variant(src):
+    """"bonsai27" or "qwen35" from a chat template text, a pack manifest dict or a pack directory. A pack made
+    before the manifest stored the template falls back to the model and source file names."""
+    if isinstance(src, str) and os.path.isdir(src):
+        try:
+            src = json.load(open(os.path.join(src, "kindi_pack.json")))
+        except (OSError, ValueError):
+            return "qwen35"
+    if isinstance(src, dict):
+        t = src.get("chat_template")
+        if not t:
+            name = (str(src.get("model", "")) + " " + str(src.get("source_file", ""))).lower()
+            return "bonsai27" if re.search(r"27b", name) else "qwen35"
+        src = t
+    return "bonsai27" if "reasoning_effort" in (src or "") else "qwen35"
+
+
+def render(messages, tools=None, enable_thinking=False, variant="qwen35", reasoning_effort=None,
+           preserve_thinking=None):
     """The GGUF chat template (text only), add_generation_prompt=True."""
+    if variant == "bonsai27":
+        return _render27(messages, tools, enable_thinking, reasoning_effort, preserve_thinking)
     if not messages:
         raise ValueError("No messages provided.")
     out = ""
@@ -100,6 +133,97 @@ def render(messages, tools=None, enable_thinking=False):
             out += "<|im_end|>\n"
         elif r == "tool":
             if i == 0 or messages[i - 1]["role"] != "tool":
+                out += "<|im_start|>user"
+            out += "\n<tool_response>\n" + c + "\n</tool_response>"
+            if i == len(messages) - 1 or messages[i + 1]["role"] != "tool":
+                out += "<|im_end|>\n"
+        else:
+            raise ValueError("Unexpected message role.")
+    gp = GEN_PROMPT_ON if enable_thinking else GEN_PROMPT_OFF
+    return out, gp
+
+
+def _argval27(v):
+    if isinstance(v, str):
+        return v
+    return json.dumps(v, ensure_ascii=False)
+
+
+def _render27(messages, tools, enable_thinking, reasoning_effort, preserve_thinking):
+    """The Ternary-Bonsai-2-27B template. enable_thinking is a bool here (the template's "undefined" case is the
+    same as True); reasoning_effort None means the template default, xhigh; preserve_thinking None means True."""
+    if not messages:
+        raise ValueError("No messages provided.")
+    instr = ""
+    if enable_thinking:
+        eff = "xhigh" if reasoning_effort is None else reasoning_effort
+        if eff not in REASONING_EFFORTS:
+            raise ValueError("Unexpected reasoning effort %s. Supported types are xhigh (default), medium, and low." % eff)
+        instr = REASONING_EFFORTS[eff]
+    keep = preserve_thinking is None or preserve_thinking is True
+    out = ""
+    if tools:
+        out += "<|im_start|>system\n"
+        if instr:
+            out += instr + "\n\n"
+        out += "# Tools\n\nYou have access to the following functions:\n\n<tools>"
+        for t in tools:
+            out += "\n" + json.dumps(t, ensure_ascii=False)
+        out += "\n</tools>" + TOOL_INSTR
+        if messages[0]["role"] == "system":
+            c = content_of(messages[0]).strip()
+            if c:
+                out += "\n\n" + c
+        out += "<|im_end|>\n"
+    elif messages[0]["role"] == "system":
+        c = content_of(messages[0]).strip()
+        if c:
+            out += "<|im_start|>system\n" + (instr + "\n\n" if instr else "") + c + "<|im_end|>\n"
+        elif instr:
+            out += "<|im_start|>system\n" + instr + "<|im_end|>\n"
+    elif instr:
+        out += "<|im_start|>system\n" + instr + "<|im_end|>\n"
+    last_q, multi = len(messages) - 1, True
+    for idx in range(len(messages) - 1, -1, -1):
+        m = messages[idx]
+        if multi and m["role"] == "user":
+            c = content_of(m).strip()
+            if not (c.startswith("<tool_response>") and c.endswith("</tool_response>")):
+                multi, last_q = False, idx
+    if multi:
+        raise ValueError("No user query found in messages.")
+    for i, m in enumerate(messages):
+        c, r = content_of(m).strip(), m["role"]
+        if r == "system":
+            if i != 0:
+                raise ValueError("System message must be at the beginning.")
+        elif r == "user":
+            out += "<|im_start|>user\n" + c + "<|im_end|>\n"
+        elif r == "assistant":
+            rc = m.get("reasoning_content")
+            rc = rc.strip() if isinstance(rc, str) else ""
+            if keep or i > last_q:
+                out += "<|im_start|>assistant\n<think>\n" + rc + "\n</think>\n\n" + c
+            else:
+                out += "<|im_start|>assistant\n" + c
+            for k, tc in enumerate(m.get("tool_calls") or []):
+                f = tc.get("function", tc)
+                if k == 0:
+                    out += ("\n\n<tool_call>\n<function=" if c.strip() else "<tool_call>\n<function=") + f["name"] + ">\n"
+                else:
+                    out += "\n<tool_call>\n<function=" + f["name"] + ">\n"
+                args = f.get("arguments")
+                if isinstance(args, str):
+                    try:
+                        args = json.loads(args) if args.strip() else {}
+                    except ValueError:
+                        args = {}
+                for an, av in (args or {}).items():
+                    out += "<parameter=" + an + ">\n" + _argval27(av) + "\n</parameter>\n"
+                out += "</function>\n</tool_call>"
+            out += "<|im_end|>\n"
+        elif r == "tool":
+            if i > 0 and messages[i - 1]["role"] != "tool":
                 out += "<|im_start|>user"
             out += "\n<tool_response>\n" + c + "\n</tool_response>"
             if i == len(messages) - 1 or messages[i + 1]["role"] != "tool":

@@ -2,7 +2,7 @@
 
 Spherical k-means of the 248,320 head rows (ternary x fp16 scales, in the folded input space the head GEMV uses):
 rows are dequantised on the GPU chunk by chunk, normalised, assigned to the nearest unit centroid by cosine and the
-centroids re-estimated with scatter-adds. Writes <pack>/head_clusters.npz (assign [R], centroids [K, 2048]).
+centroids re-estimated with scatter-adds. Writes <pack>/head_clusters.npz (assign [R], centroids [K, D]).
 About 2 minutes on a K420; needs ~300 MB of GPU memory (stop `kindi serve` first)."""
 import json
 import os
@@ -12,11 +12,11 @@ import numpy as np
 
 DEQ_SRC = r'''
 extern "C" __global__ void deq(const unsigned char* __restrict__ b, const unsigned short* __restrict__ s,
-                               float* __restrict__ out, int n){
-  const int r = blockIdx.x, t = threadIdx.x;      /* 512 threads: one 4-column slot each */
-  const unsigned int v = b[(long long)r * 512 + t];
-  float sc; asm("cvt.f32.f16 %0, %1;" : "=f"(sc) : "h"(s[(long long)r * 16 + (t >> 5)]));
-  float* o = out + (long long)r * 2048 + 4 * t;
+                               float* __restrict__ out, int n, int C){
+  const int r = blockIdx.x, t = threadIdx.x;      /* C/4 threads: one 4-column slot each */
+  const unsigned int v = b[(long long)r * (C >> 2) + t];
+  float sc; asm("cvt.f32.f16 %0, %1;" : "=f"(sc) : "h"(s[(long long)r * (C >> 7) + (t >> 5)]));
+  float* o = out + (long long)r * C + 4 * t;
   o[0] = (float)((int)(v % 3u) - 1) * sc;
   o[1] = (float)((int)((v / 3u) % 3u) - 1) * sc;
   o[2] = (float)((int)((v / 9u) % 3u) - 1) * sc;
@@ -27,19 +27,22 @@ extern "C" __global__ void deq(const unsigned char* __restrict__ b, const unsign
 def build(pack, K=1024, iters=12, log=print):
     import cupy as cp
     import cupyx
-    rec = json.load(open(os.path.join(pack, "bcodes_index.json")))["tensors"]["token_embd.weight"]
+    head = json.load(open(os.path.join(pack, "kindi_pack.json"))).get("head", "token_embd.weight")
+    rec = json.load(open(os.path.join(pack, "bcodes_index.json")))["tensors"][head]
     R, C = rec["rows"], rec["ne0"]
     ns, P = C // 4, C // 128
-    bc = np.fromfile(os.path.join(pack, "bcodes.bin"), dtype=np.uint8, count=ns * R).reshape(ns, R)
-    dp = np.fromfile(os.path.join(pack, "dpm.bin"), dtype=np.uint16, count=P * R).reshape(P, R)
+    bc = np.fromfile(os.path.join(pack, "bcodes.bin"), dtype=np.uint8, count=ns * R,
+                     offset=rec["bc_off"]).reshape(ns, R)
+    dp = np.fromfile(os.path.join(pack, "dpm.bin"), dtype=np.uint16, count=P * R,
+                     offset=rec["dpm_off"]).reshape(P, R)
     deq = cp.RawKernel(DEQ_SRC, "deq")
     CH = 16384
 
     def chunk(i0):
         n = min(CH, R - i0)
         out = cp.empty((n, C), dtype=cp.float32)
-        deq((n,), (512,), (cp.asarray(np.ascontiguousarray(bc[:, i0:i0 + n].T)),
-                           cp.asarray(np.ascontiguousarray(dp[:, i0:i0 + n].T)), out, np.int32(n)))
+        deq((n,), (C // 4,), (cp.asarray(np.ascontiguousarray(bc[:, i0:i0 + n].T)),
+                              cp.asarray(np.ascontiguousarray(dp[:, i0:i0 + n].T)), out, np.int32(n), np.int32(C)))
         out /= cp.maximum(cp.sqrt((out * out).sum(axis=1, keepdims=True)), 1e-12)
         return out
 

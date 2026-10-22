@@ -6,8 +6,8 @@ session uses a few MB, which is fine; another CUDA or Vulkan program is not). Fr
 
 **`no model pack at ...`.** Run `kindi convert <model.gguf>` first, or point `pack` at the right directory.
 
-**`needs the PTQ1_0 GGUF`.** Kindi 0.1.0 reads the PTQ1_0 file of Ternary-Bonsai-2-2B. The Q2_0 / PQ2_0 files hold
-the same model in another format, and Kindi does not support them yet.
+**`needs the PTQ1_0 GGUF`.** Kindi reads the PTQ1_0 files of Ternary-Bonsai-2-2B, -4B, -9B and -27B. The Q2_0 / PQ2_0
+files hold the same models in another format, and Kindi does not support them yet.
 
 **CUDA errors such as `no kernel image is available` or `CUDA driver version is insufficient`.** Use the NVIDIA 470
 driver and the CUDA 10.2 stack in the Docker image.
