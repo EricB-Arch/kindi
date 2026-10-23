@@ -280,7 +280,7 @@ The other cards, at a short context, exact head:
 | Card | Model | Generation | Prompt reading (512 tokens) |
 |---|---|---|---|
 | Quadro K1200 | 2B / 4B / 9B | 81.0 / 39.2 / 23.4 tokens/s | 194.5 / 77.4 / 41.7 tokens/s |
-| 2x Quadro K1200 | 27B | 13.0 | 21.0 |
+| 2x Quadro K1200 | 27B | 12.6 | 19.5 |
 | GeForce GTX 1080 | 27B | 27.9 | 254.0 |
 | GeForce RTX 3080 (190 W) | 27B | 63.2 (99.9 with the 2B draft model, on agent prompts) | 1,093 |
 

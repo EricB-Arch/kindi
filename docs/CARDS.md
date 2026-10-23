@@ -58,7 +58,7 @@ Replace `...` with the variables in the section for your card. To use one card o
 | model | Ternary-Bonsai-2-27B (`/data/pack27b`) |
 | variables | `KINDI_PACK=/data/pack27b`, `KINDI_CTX=24576`, `KINDI_HEAD=exact`, `KINDI_CHECKPOINT_BUDGET_MB=4096`, `KINDI_REPEAT_STOP=1` |
 | docker | `--gpus all` (the engine uses both cards), `--memory 12g` |
-| generation | 13.0 tokens/s |
+| generation | 12.6 tokens/s |
 | prompt reading | 20.9 tokens/s at 512 tokens, 18.4 at 22K (dev code of 10-21, the chunk-path copy) |
 
 - The K/V cache is q8_0. The output matches llama.cpp with `-ctk q8_0 -ctv q8_0`.

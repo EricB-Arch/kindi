@@ -24,7 +24,7 @@ generated. Project page: [amirhusain.com/kindi](https://amirhusain.com/kindi/).
 
 ## Quadro K1200, 4 GB, one card · 2B, 4B and 9B
 
-2026-10-22. Kindi: dev commit 7fb99ff, ctx 24,576, f16 K/V, chunked prompt reading. llama.cpp: Prism ML's fork,
+2026-10-23 (Kindi) and 2026-10-22 (llama.cpp). Kindi 0.2.0, ctx 24,576, f16 K/V, chunked prompt reading. llama.cpp: Prism ML's fork,
 Vulkan build, `-ngl 99 -fa on -c 24640 -b 2048 -ub 512 --cache-ram 0`, f16 K/V. Each model had a 1-hour limit.
 
 | Model | Context | Kindi read | llama.cpp read | Kindi write | llama.cpp write |
@@ -49,16 +49,16 @@ The largest context on the card:
 
 ## Two Quadro K1200 cards · Ternary-Bonsai-2-27B
 
-2026-10-21. Kindi: dev commit d62501b, the tensor-parallel engine, q8_0 K/V. llama.cpp: Prism ML's fork, Vulkan
+2026-10-23 (Kindi) and 2026-10-21/22 (llama.cpp). Kindi 0.2.0, the tensor-parallel engine, q8_0 K/V. llama.cpp: Prism ML's fork, Vulkan
 build, `-ngl 99 -sm layer -fa 1 -ctk q8_0 -ctv q8_0`, with its default layer split (an even split does not load).
 
 | Context | Kindi read | llama.cpp read | Kindi write | llama.cpp write |
 |---|---:|---:|---:|---:|
-| short (generation at a position below 150) | - | - | 13.0 | 1.69 |
-| 512 (the same 512 token ids) | 21.0 | 1.63 | - | - |
+| short (Kindi: generation at position 128; llama.cpp: below position 150) | - | - | 12.6 | 1.69 |
+| 512 (the same 512 token ids) | 19.5 | 1.63 | - | - |
 | 1,000 | not measured | does not run (a 508 MB Vulkan allocation fails) | not measured | does not run |
 
-The 512-token read was measured on 2026-10-22 with the 0.2.0 engine code (dev commit 7fb99ff) and llama-server
+Kindi's 512-token read is the best of 3 from an empty state. llama.cpp's was measured on 2026-10-22 with llama-server
 `-ngl 99 -sm layer -fa on -ctk q8_0 -ctv q8_0 -c 1024`, with the token ids sent to `/completion`.
 
 At 1.3 tokens/s, a 24,000-token prompt takes about 5 hours on llama.cpp, so there are no deeper rows.
