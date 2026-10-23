@@ -12,7 +12,7 @@ For tool calls, Kindi uses the standard `tools` / `tool_calls` fields.
 
 1. **Context window: 24,576 tokens** (or your `ctx`). Clients that summarise old turns ("compaction") should do it
    before that.
-2. **A long request timeout - 30 to 60 minutes.** Kindi reads new prompt text at about 26 tokens/s. The first request
+2. **A long request timeout - 30 to 60 minutes.** Kindi reads new prompt text at about 25-33 tokens/s. The first request
    from an agent that writes code often has 5,000+ tokens of system prompt and tool definitions. The first read of
    that text takes about 3 minutes. The cache then saves it (see the README), so later turns and later sessions are
    fast. Some clients stop after 60-120 s and send the request again. This makes the problem worse: the retry waits

@@ -11,8 +11,8 @@ parameters, ternary weights). It started on the **NVIDIA Quadro K420** (Kepler, 
 **20-23 tokens per second**. Version 0.2.0 adds the Quadro K1200, two cards in tensor parallel, the GeForce GTX 1080,
 the GeForce RTX 3080, a CPU engine and a one-command installer. It has an **OpenAI-compatible server** for chat
 clients, scripts and agents that write code. Its default output is token-for-token identical to the output of
-llama.cpp for the same model file. On the K420, with the same file and the same context, it generates 12x faster
-than llama.cpp. The comparisons for each card are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). The one-page summary
+llama.cpp for the same model file. On the K420, with the same file and the same context, it generates about 13x
+faster than llama.cpp. The comparisons for each card are in [docs/BENCHMARKS.md](docs/BENCHMARKS.md). The one-page summary
 is [WHY.md](WHY.md).
 
 <p align="center"><img src="assets/kindi-demo.gif" alt="The pi coding agent driving Kindi on a Quadro K420: it runs nvidia-smi, writes and runs a Python script, and checks disk space" width="100%"></p>
@@ -22,7 +22,7 @@ connected to <code>kindi serve</code> on one Quadro K420, default settings. Toke
 shortened pauses longer than 2.5 s. The <a href="https://github.com/ahtx/kindi/releases/download/v0.1.0/kindi-demo-untrimmed.mp4">full
 video</a> (123 s, no pauses shortened) and its <a href="https://github.com/ahtx/kindi/releases/download/v0.1.0/kindi-demo.cast">asciicast</a> are in the 0.1.0 release.</sub></p>
 
-<p align="center"><img src="assets/kindi-speed.svg" alt="Write speed in tokens per second, Kindi 0.2.0 and llama.cpp on the same card with the same model file and context: Quadro K420 1 GB, 2B, 20.8 and 1.65; Quadro K1200, 2B, 81.0 and 20.8; 4B, 39.2 and 8.7; 9B, 23.4 and 5.9; two Quadro K1200 cards, 27B, 13.0 and 1.69; GeForce GTX 1080, 27B, 27.8 and 19.4 at 512 tokens, and 15.4 at 64,000 tokens, where llama.cpp runs out of memory; GeForce RTX 3080 at 190 W, 27B, 62.4 and 52.9 at 1K and 43.6 and 24.7 at 90K." width="100%"></p>
+<p align="center"><img src="assets/kindi-speed.svg" alt="Write speed in tokens per second, Kindi and llama.cpp on the same card with the same model file and context: Quadro K420 1 GB, 2B, 20.8 and 1.65; Quadro K1200, 2B, 81.0 and 20.8; 4B, 39.2 and 8.7; 9B, 23.4 and 5.9; two Quadro K1200 cards, 27B, 13.0 and 1.69; GeForce GTX 1080, 27B, 27.9 and 19.4 at 512 tokens, and 15.4 at 64,000 tokens, where llama.cpp runs out of memory; GeForce RTX 3080 at 190 W, 27B, 63.2 and 52.2 at 1K and 44.0 and 23.5 at 90K. Builds: K420, GTX 1080 and RTX 3080 Kindi 0.2.0; K1200 dev 7fb99ff; 2x K1200 dev d62501b (read: 7fb99ff)." width="100%"></p>
 
 By [Amir Husain](https://www.amirhusain.com). Watch the [launch video](https://youtu.be/ddAnghj8HpE) on YouTube.
 
@@ -264,15 +264,16 @@ head mode, cache sizes and generation defaults.
 
 ## Performance
 
-Quadro K420, Ternary-Bonsai-2-2B, `kindi bench`:
+Quadro K420, Ternary-Bonsai-2-2B, `kindi bench` (dev build de83d2f, blocking sync off, the installer's setting):
 
 | | exact head | fast head |
 |---|---|---|
-| generation, short context | 20.8 tokens/s | 22.9 tokens/s |
-| generation at 8,000 tokens of context | 18.6 | 20.9 |
-| generation at 16,000 | 16.8 | 18.6 |
-| generation at 24,000 | 15.4 | 17.0 |
-| prompt read speed | 26.5 tokens/s | 26.5 |
+| generation, short context | 20.9 tokens/s | 24.1 tokens/s |
+| generation at 8,000 tokens of context | 18.5 | 20.9 |
+| generation at 16,000 | 16.7 | 18.6 |
+| generation at 24,000 | 15.2 | 16.8 |
+
+Prompt reading on the same card (Kindi 0.2.0, exact head): 33.3 tokens/s at 512 tokens, 24.2 at 24,000.
 
 The other cards, at a short context, exact head:
 
@@ -280,8 +281,8 @@ The other cards, at a short context, exact head:
 |---|---|---|---|
 | Quadro K1200 | 2B / 4B / 9B | 81.0 / 39.2 / 23.4 tokens/s | 194.5 / 77.4 / 41.7 tokens/s |
 | 2x Quadro K1200 | 27B | 13.0 | 21.0 |
-| GeForce GTX 1080 | 27B | 27.8 | 250.9 |
-| GeForce RTX 3080 (190 W) | 27B | 62.4 (100 with the 2B draft model, on agent prompts) | 1,069 |
+| GeForce GTX 1080 | 27B | 27.9 | 254.0 |
+| GeForce RTX 3080 (190 W) | 27B | 63.2 (99.9 with the 2B draft model, on agent prompts) | 1,093 |
 
 llama.cpp on the same card, with the same model file and the same context: on the K420, it generates 1.65
 tokens/s and reads prompts at 1.2 tokens/s (512 tokens). The tables for each card, with their method, are in

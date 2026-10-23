@@ -11,13 +11,13 @@ generated. Project page: [amirhusain.com/kindi](https://amirhusain.com/kindi/).
 
 ## Quadro K420, 1 GB · Ternary-Bonsai-2-2B
 
-2026-10-21. Kindi: dev commit bb2d506, ctx 24,576, f16 K/V. llama.cpp: the prebuilt Vulkan release,
+2026-10-23. Kindi 0.2.0, ctx 24,576, f16 K/V. llama.cpp: the prebuilt Vulkan release,
 `-ngl 99 -fa on -c 24640 -b 2048 -ub 512`, f16 K/V. Model file sha256 36061ad4….
 
 | Context | Kindi read | llama.cpp read | Kindi write | llama.cpp write |
 |---|---:|---:|---:|---:|
 | 512 | 33.3 | 1.2 | 20.8 | 1.65 |
-| 8,192 | 29.7 | crashed (Vulkan ErrorDeviceLost after 17 minutes) | 18.5 | crashed |
+| 8,192 | 29.7 | crashed (Vulkan ErrorDeviceLost after 17 minutes) | 18.6 | crashed |
 | 24,000 | 24.2 | not measured (it crashed at 8,192) | 15.3 | not measured |
 | 32,768 | Kindi: does not fit (its maximum on 1 GB is 24,576) | loads; not measured | does not fit | not measured |
 | 65,536 | does not fit | does not load (an 805 MB allocation fails) | does not fit | does not load |
@@ -65,42 +65,46 @@ At 1.3 tokens/s, a 24,000-token prompt takes about 5 hours on llama.cpp, so ther
 
 ## GeForce GTX 1080, 8 GB · Ternary-Bonsai-2-27B
 
-2026-10-21. Kindi: dev commit a9b627e, one-card plan engine, 5-trit weights, int8 chunked prompt reading, ctx
+2026-10-22 (Kindi) and 2026-10-21 (llama.cpp). Kindi 0.2.0, one-card plan engine, 5-trit weights, int8 chunked prompt reading, ctx
 65,536, q8_0 K/V. llama.cpp: Prism ML's fork, CUDA build for sm_61, `-ngl 99 -fa on -ctk q8_0 -ctv q8_0 -b 2048
 -ub 512 -c 49280`. Model file sha256 53107f53….
 
 | Context | Kindi read | llama.cpp read | Kindi write | llama.cpp write |
 |---|---:|---:|---:|---:|
-| 512 | 250.9 | 98.1 | 27.8 | 19.4 |
-| 8,192 | 224.6 | 96.2 | 25.7 | 18.1 |
-| 32,768 | 167.5 | 84.9 | 19.7 | 14.3 |
-| 49,152 | 143.4 | 78.6 | 17.2 | 12.6 |
-| 64,000 | 127.0 | out of memory (it does not load at 64K) | 15.4 | out of memory |
+| 512 | 254.0 | 98.1 | 27.9 | 19.4 |
+| 8,192 | 227.1 | 96.2 | 25.7 | 18.1 |
+| 32,768 | 169.1 | 84.9 | 19.7 | 14.3 |
+| 49,152 | 144.6 | 78.6 | 17.2 | 12.6 |
+| 64,000 | 127.8 | out of memory (it does not load at 64K) | 15.4 | out of memory |
 
 ## GeForce RTX 3080, 10 GB · Ternary-Bonsai-2-27B
 
 2026-10-22, one physical card (cluster GPU 7), both engines. The cluster cards have a power limit of 190 W; 380 W is
-the default of the card. Kindi: the tensor-core engine of 0.2.0, development build of 2026-10-22,
+the default of the card. Kindi 0.2.0 (the 190 W columns; the 380 W columns: see below), tensor-core engine,
 `KINDI_TC=1 KINDI_FD=1 KINDI_ATT_TC=1`, exact head, q8_0 K/V. llama.cpp: Prism ML's fork 1180918, CUDA 12.4 build
 for sm_86. llama-bench `-ngl 99 -fa 1 -ctk q8_0 -ctv q8_0 -r 1`: read pp512 / 3000 / 12000 / 22000 from an empty
 cache, write tg32 at a depth of 1K / 32K / 64K / 90K. No CPU limit (`--cpus 4.0`).
 
 | Context | Kindi read 190 W | llama.cpp read 190 W | Kindi read 380 W | llama.cpp read 380 W |
 |---|---:|---:|---:|---:|
-| 512 | 1,069 | 960 | 1,361 | 1,217 |
-| 3,000 | 1,005 | 1,006 | 1,282 | 1,265 |
-| 12,000 | 924 | 931 | 1,171 | 1,170 |
-| 22,000 | 838 | 853 | 1,050 | 1,074 |
+| 512 | 1,093 | 936 | 1,361 | 1,217 |
+| 3,000 | 1,029 | 995 | 1,282 | 1,265 |
+| 12,000 | 944 | 926 | 1,171 | 1,170 |
+| 22,000 | 855 | 855 | 1,050 | 1,074 |
+
+In the 380 W columns, Kindi is the dev build release-tcspec6 (2026-10-22), whose exact path is the same code as 0.2.0.
 
 | Depth | Kindi write 190 W | llama.cpp write 190 W | Kindi write 380 W | llama.cpp write 380 W |
 |---|---:|---:|---:|---:|
-| 1,000 | 62.4 | 52.9 | 66.4 | 56.5 |
-| 32,768 | 55.6 | 41.2 | 60.1 | 47.0 |
-| 65,536 | 48.7 | 29.5 | 54.7 | 37.9 |
-| 90,000 | 43.6 | 24.7 | 51.2 | 32.9 |
+| 1,000 | 63.2 | 52.2 | 66.4 | 56.5 |
+| 32,768 | 56.3 | 41.0 | 60.1 | 47.0 |
+| 65,536 | 49.8 | 28.0 | 54.7 | 37.9 |
+| 90,000 | 44.0 | 23.5 | 51.2 | 32.9 |
 
-With one CPU core (`--cpus 1.0`, llama.cpp `-t 1 -tb 1`), the two engines stay within 5% of these values. Kindi
-uses about 0.02 CPU cores per stream; llama.cpp uses about 0.77.
+In the 380 W columns, Kindi is the dev build release-tcspec6 (2026-10-22), whose exact path is the same code as 0.2.0.
+
+Kindi uses about 0.02-0.05 CPU cores per stream (0.2.0); llama.cpp about 0.77, and both stay within 5% on one core
+(`--cpus 1.0`, llama.cpp `-t 1 -tb 1`; release-tcspec6 run).
 
 Agent prompts: 30 greedy and 20 sampled (temperature 0.7) pi prompts of 1,100 to 10,500 tokens, 128 tokens out,
 through the servers (llama-server `-fa on -ctk q8_0 -ctv q8_0 -c 81920 -np 1 --cache-ram 0`). Write speed, greedy /
@@ -108,10 +112,12 @@ sampled:
 
 | Engine | 190 W | 380 W |
 |---|---:|---:|
-| llama.cpp | 50.9 / 57.4 | 53.2 / 60.8 |
-| Kindi, exact | 61.9 / 55.7 | 66.9 / 58.6 |
-| Kindi + the 2B draft model (`KINDI_SPEC=draft2b`) | 100.3 / 85.3 | 107.9 / 90.9 |
+| llama.cpp | 48.7 / 54.9 | 53.2 / 60.8 |
+| Kindi, exact | 61.8 / 57.7 | 66.9 / 58.6 |
+| Kindi + the 2B draft model (`KINDI_SPEC=draft2b`) | 99.9 / 91.3 | 107.9 / 90.9 |
 | llama.cpp + the 2B draft model (`-md`) | does not load | does not load |
+
+In the 380 W column, Kindi is the dev build release-tcspec6 (2026-10-22): its exact path is the same code as 0.2.0, and its draft-model row is from before 0.2.0's draft-model fix.
 
 With the draft model, Kindi's greedy output is the same as without it (30 of 30 prompts). llama.cpp 1180918 does
 not load the 2B as a draft model for the 27B: the two files have different Hadamard metadata.

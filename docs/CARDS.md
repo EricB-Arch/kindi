@@ -3,7 +3,7 @@
 The installer ([INSTALL.md](INSTALL.md)) uses these settings. It selects them from the cards that it finds.
 
 Blocking sync (`KINDI_BLOCKING_SYNC`, on by default) lets the host thread sleep while it waits for the card. It
-costs about 2.5% of the decode speed on the GTX 1080. With one server on its own card, set `KINDI_BLOCKING_SYNC=0`
+costs 2-3% of the decode speed on the GTX 1080. With one server on its own card, set `KINDI_BLOCKING_SYNC=0`
 (the installer does this). The RTX 3080 profile keeps it on: there, many servers share few CPU cores.
 
 This page gives the settings for each tested card. It also gives the speeds that we measured with these settings.
@@ -27,7 +27,7 @@ Replace `...` with the variables in the section for your card. To use one card o
 | model | Ternary-Bonsai-2-2B |
 | variables | `KINDI_CTX=24576` (the default) |
 | generation | 20.8 tokens/s (exact head), about 23 tokens/s (fast head) |
-| prompt reading | 31.6 tokens/s at 3K tokens, 28.1 at 12K (one token at a time: 25.3 and 23.4) |
+| prompt reading | 31.6 tokens/s at 3K tokens, 28.1 at 12K (one token at a time: 25.3 and 23.4; dev build of 10-21) |
 
 - The prompt path uses chunks of 128 tokens on this card. Then the context stays at 24,576 tokens.
 - To read prompts one token at a time, set `KINDI_CHUNK=0`.
@@ -39,7 +39,6 @@ Replace `...` with the variables in the section for your card. To use one card o
 | model | Ternary-Bonsai-2-2B (or the 4B with `KINDI_PACK=/data/pack4b`) |
 | variables | `KINDI_CTX=65536` for the 2B, `KINDI_CTX=24576` for the 4B |
 | generation | 2B: 21.2 tokens/s (exact head), 24.8 (fast head); 4B: 9.8 tokens/s |
-| prompt reading | 2B: 31.6 tokens/s at 3K tokens, 28.2 at 12K |
 
 ## Quadro K1200, 4 GB (Maxwell, sm_50)
 
@@ -60,7 +59,7 @@ Replace `...` with the variables in the section for your card. To use one card o
 | variables | `KINDI_PACK=/data/pack27b`, `KINDI_CTX=24576`, `KINDI_HEAD=exact`, `KINDI_CHECKPOINT_BUDGET_MB=4096`, `KINDI_REPEAT_STOP=1` |
 | docker | `--gpus all` (the engine uses both cards), `--memory 12g` |
 | generation | 13.0 tokens/s |
-| prompt reading | 20.9 tokens/s at 512 tokens, 18.4 at 22K |
+| prompt reading | 20.9 tokens/s at 512 tokens, 18.4 at 22K (dev code of 10-21, the chunk-path copy) |
 
 - The K/V cache is q8_0. The output matches llama.cpp with `-ctk q8_0 -ctv q8_0`.
 - Set the host to text mode. A desktop session turns on the CUDA watchdog, and the watchdog stops the exchange
@@ -73,7 +72,7 @@ Replace `...` with the variables in the section for your card. To use one card o
 | model | Ternary-Bonsai-2-27B |
 | variables | `KINDI_PACK=/data/pack27b`, `KINDI_CARDS=1`, `KINDI_CTX=65536`, `KINDI_HEAD=exact`, `KINDI_REPEAT_STOP=1`, `KINDI_MAX_TOKENS=65536` |
 | generation | 28.4 tokens/s at a short context, 16.0 at 60K |
-| prompt reading | 249 tokens/s at 512 tokens, 240 at 3K, 213 at 12K, 188 at 22K |
+| prompt reading | 249 tokens/s at 512 tokens, 237 at 3K, 213 at 12K, 188 at 22K |
 
 - The first start writes the 5-trit weights into the pack (`g5n_*.bin`, 5.6 GB). This takes about 12 minutes.
   Later starts take about 30 seconds.
@@ -91,6 +90,8 @@ Replace `...` with the variables in the section for your card. To use one card o
 | context | 110,592 tokens (the fit to the free memory) |
 | generation | 47-49 tokens/s at a short context, 29 at 64K |
 | prompt reading | 491 tokens/s at 512 tokens, 381 at 22K |
+
+These figures are from kindi-rel, 10-21, not the 0.2.0 build.
 
 Tensor cores and speculative decoding (sm_80 and later). This is the profile of the RTX 3080 cluster servers, and
 the installer uses it:
@@ -112,8 +113,8 @@ the installer uses it:
 | `KINDI_PARK_MAX` | `1` | parked conversations (`0` on the agent servers: one conversation each) |
 | `KINDI_PREFIX_MAX` | `2` | saved openings on disk |
 
-With this profile: context 84,992 tokens, generation 94 tokens/s (greedy) and 78-89 tokens/s (sampled), prompt
-reading about 1,000 tokens/s.
+With this profile: context 84,992 tokens; at 190 W on agent prompts 99.9 tokens/s greedy and 91.3 sampled; prompt
+reading 1,093 tokens/s at 512 to 855 at 22K.
 
 - With `KINDI_TC=1`, the server reads prompts in passes of up to `KINDI_TC_TMAX` tokens.
 - Speculative greedy output is the same as the output without speculation.
@@ -126,7 +127,6 @@ reading about 1,000 tokens/s.
 |---|---|
 | models | 2B, 4B or 9B |
 | variables | `KINDI_DEVICE=cpu`, `OMP_NUM_THREADS=<cores of one socket>`, `OMP_PROC_BIND=close`, `OMP_PLACES=cores` |
-| generation (20 threads) | 2B 41-44 tokens/s, 4B 19, 9B 10-12 |
 
 - The CPU engine needs gcc with OpenMP. It builds `libkcpu.so` at the first start (`KINDI_CPU_CACHE`).
 - The output is token-exact with llama.cpp.

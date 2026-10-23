@@ -114,4 +114,4 @@ bash install.sh --uninstall --purge  # also ~/.kindi
 | GeForce RTX 3080 10 GB | tc: 2B installed; the 27B selection in a dry run | PASS: verify 4 of 4, 147 tokens/s (2B) |
 
 On the RTX 3080 we tested the installer with the 2B and with a dry run of the 27B selection. The full 27B path
-on the 3080 (tensor cores and the 2B draft model, 131,072 tokens) has its own gate on the production cluster.
+on the 3080 (tensor cores and the 2B draft model, about 85,000 tokens (84,992)) has its own gate on the production cluster.
