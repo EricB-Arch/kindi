@@ -15,7 +15,7 @@ driver and the CUDA 10.2 stack in the Docker image.
 **The first start is slow.** Kindi compiles its CUDA kernels with NVRTC on first use (about a minute) and caches them
 under `state_dir/kernels`.
 
-**A client times out or retries on the first request.** Kindi reads the first long prompt at ~26 tokens/s. Raise the
+**A client times out or retries on the first request.** Kindi reads the first long prompt at about 25-33 tokens/s. Raise the
 client's timeout and limit retries (see [AGENTS.md](AGENTS.md)); watch progress with `curl -s
 localhost:8093/health`.
 
