@@ -358,3 +358,8 @@ Kindi exists because of the model it runs. Thank you to [Prism ML](https://huggi
 Apache 2.0. Thank you to the Qwen team at Alibaba Cloud for Qwen3.5-2B, the base model of Ternary-Bonsai-2-2B. Thank
 you also to the [llama.cpp](https://github.com/ggml-org/llama.cpp) authors. Their implementation is the reference
 that we check Kindi's output against.
+
+## Contributions
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for bug reports, submitted work and the
+[Contributor License Agreement](CLA.md). AI-assisted work is welcome on the same terms.
